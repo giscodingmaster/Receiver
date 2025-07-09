@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receiver</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f8f9fa; 
+            padding: 20px; 
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background: white; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            overflow: hidden; 
+        }
+        .header { 
+            background: linear-gradient(135deg, #2c3e50, #3498db); 
+            color: white; 
+            padding: 30px; 
+            text-align: center; 
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .tab-buttons { 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        .tab-btn { 
+            background: rgba(255,255,255,0.2); 
+            border: none; 
+            color: white; 
+            padding: 12px 30px; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-size: 1.1em; 
+            transition: all 0.3s ease; 
+        }
+        .tab-btn:hover { background: rgba(255,255,255,0.3); }
+        .tab-btn.active { background: white; color: #2c3e50; }
+        .content { padding: 40px; }
+        .upload-zone { 
+            border: 2px dashed #3498db; 
+            border-radius: 12px; 
+            padding: 60px; 
+            text-align: center; 
+            background: #f8f9fa; 
+            margin-bottom: 30px; 
+            transition: all 0.3s ease; 
+        }
+        .upload-zone:hover { border-color: #2c3e50; background: #e8f4f8; }
+        .upload-zone.dragover { border-color: #27ae60; background: #d5f4e6; }
+        .upload-btn { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            padding: 15px 40px; 
+            border-radius: 25px; 
+            font-size: 1.1em; 
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+        }
+        .upload-btn:hover { background: #2c3e50; }
+        .file-input { display: none; }
+        .pending-files { margin-top: 30px; }
+        .file-item { 
+            background: white; 
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin-bottom: 15px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+        }
+        .file-name { font-weight: 600; color: #2c3e50; }
+        .file-controls { display: flex; align-items: center; gap: 15px; }
+        .status-select { 
+            padding: 8px 16px; 
+            border: 1px solid #3498db; 
+            border-radius: 20px; 
+            background: white; 
+            cursor: pointer; 
+        }
+        .confirm-btn { 
+            background: #27ae60; 
+            color: white; 
+            border: none; 
+            padding: 8px 20px; 
+            border-radius: 20px; 
+            cursor: pointer; 
+            font-size: 0.9em; 
+        }
+        .confirm-btn:hover { background: #219a52; }
+        .admin-content { display: none; }
+        .export-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 30px; 
+        }
+        .export-card { 
+            background: white; 
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            padding: 20px; 
+            text-align: center; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+        }
+        .export-count { 
+            font-size: 2em; 
+            font-weight: bold; 
+            color: #3498db; 
+            margin-bottom: 10px; 
+        }
+        .export-label { 
+            color: #6c757d; 
+            margin-bottom: 15px; 
+            text-transform: capitalize; 
+        }
+        .export-btn { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 20px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-size: 0.9em; 
+        }
+        .export-btn:hover { background: #2c3e50; }
+        .export-btn:disabled { 
+            background: #bdc3c7; 
+            cursor: not-allowed; 
+        }
+        .files-list { 
+            max-height: 400px; 
+            overflow-y: auto; 
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            background: white; 
+        }
+        .admin-file-item { 
+            padding: 15px; 
+            border-bottom: 1px solid #f1f3f4; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .admin-file-item:last-child { border-bottom: none; }
+        .admin-file-item.exported { background: #e8f8f5; }
+        .file-meta { flex: 1; }
+        .file-title { font-weight: 600; margin-bottom: 5px; }
+        .file-date { color: #6c757d; font-size: 0.85em; }
+        .status-badge { 
+            padding: 4px 12px; 
+            border-radius: 12px; 
+            font-size: 0.8em; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            color: white; 
+        }
+        .status-map_confirmed { background: #3498db; }
+        .status-site_confirmed { background: #27ae60; }
+        .status-needs_field_visit { background: #f39c12; }
+        .status-site_issue_reported { background: #e74c3c; }
+        .message { 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 15px 0; 
+            font-weight: 500; 
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { 
+            text-align: center; 
+            padding: 40px; 
+            color: #6c757d; 
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .content { padding: 20px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 2em; }
+            .tab-buttons { flex-direction: column; align-items: center; }
+            .upload-zone { padding: 40px 20px; }
+            .export-grid { grid-template-columns: 1fr; }
+            .file-controls { flex-direction: column; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Smart Excel Manager</h1>
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="showTab('upload')">Upload Files</button>
+                <button class="tab-btn" onclick="showTab('admin')">Export & Manage</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- Upload Tab -->
+            <div id="upload-content" class="upload-content">
+                <div class="upload-zone" id="uploadZone">
+                    <div style="font-size: 3em; margin-bottom: 15px;">📁</div>
+                    <h3>Drop Excel files here or click to select</h3>
+                    <p style="color: #6c757d; margin: 10px 0;">Supports .xlsx, .xls files with CRN columns</p>
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        Choose Files
+                    </button>
+                    <input type="file" id="fileInput" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="pendingFiles" class="pending-files"></div>
+            </div>
+            
+            <!-- Admin Tab -->
+            <div id="admin-content" class="admin-content">
+                <div class="export-grid" id="exportGrid"></div>
+                <h3 style="margin-bottom: 15px; color: #2c3e50;">All Files</h3>
+                <div class="files-list" id="filesList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHAX2YMq-28xGn4Yv0BHw_4km-kEwWXhc",
+            authDomain: "excel-receiver.firebaseapp.com",
+            databaseURL: "https://excel-receiver-default-rtdb.firebaseio.com",
+            projectId: "excel-receiver",
+            storageBucket: "excel-receiver.appspot.com",
+            messagingSenderId: "675651640279",
+            appId: "1:675651640279:web:6746a850c0b0a80a2ac992"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        let pendingFiles = [];
+        let allFiles = {};
+
+        const classifications = {
+            'map_confirmed': 'Map Confirmed',
+            'site_confirmed': 'Site Confirmed', 
+            'needs_field_visit': 'Needs Field Visit',
+            'site_issue_reported': 'Site Issue Reported'
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        function initializeApp() {
+            setupDragAndDrop();
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        }
+
+        function setupDragAndDrop() {
+            const zone = document.getElementById('uploadZone');
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                handleFileSelect({ target: { files: e.dataTransfer.files } });
+            });
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (tab === 'upload') {
+                document.getElementById('upload-content').style.display = 'block';
+                document.getElementById('admin-content').style.display = 'none';
+            } else {
+                const password = prompt("Enter admin password:");
+                if (password === "admin@789") {
+                    document.getElementById('upload-content').style.display = 'none';
+                    document.getElementById('admin-content').style.display = 'block';
+                    loadAdminData();
+                } else if (password !== null) {
+                    alert("Wrong password");
+                    showTab('upload');
+                }
+            }
+        }
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => processFile(file));
+        }
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const workbook = XLSX.read(e.target.result, { type: 'binary' });
+                    const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+                    
+                    if (validateFile(data, file.name)) {
+                        const fileData = {
+                            id: Date.now() + Math.random().toString(36).substr(2, 9),
+                            name: file.name,
+                            data: data,
+                            size: file.size
+                        };
+                        pendingFiles.push(fileData);
+                        displayPendingFile(fileData);
+                    }
+                } catch (error) {
+                    showMessage(`Error reading ${file.name}: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        function validateFile(data, fileName) {
+            if (!data || data.length === 0) {
+                showMessage(`${fileName} is empty`, 'error');
+                return false;
+            }
+            
+            const hasCrn = data[0].some(header => 
+                header && header.toString().toLowerCase().trim() === 'crn'
+            );
+            
+            if (!hasCrn) {
+                showMessage(`${fileName} must have a 'CRN' column`, 'error');
+                return false;
+            }
+            
+            return true;
+        }
+
+        function displayPendingFile(fileData) {
+            const container = document.getElementById('pendingFiles');
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'file-item';
+            fileDiv.innerHTML = `
+                <div>
+                    <div class="file-name">${fileData.name}</div>
+                    <div style="color: #6c757d; font-size: 0.9em;">${formatFileSize(fileData.size)}</div>
+                </div>
+                <div class="file-controls">
+                    <select class="status-select" id="status-${fileData.id}">
+                        <option value="">Select status...</option>
+                        ${Object.entries(classifications).map(([key, label]) => 
+                            `<option value="${key}">${label}</option>`
+                        ).join('')}
+                    </select>
+                    <button class="confirm-btn" onclick="confirmFile('${fileData.id}')">Save</button>
+                </div>
+            `;
+            container.appendChild(fileDiv);
+        }
+
+        function confirmFile(fileId) {
+            const fileData = pendingFiles.find(f => f.id === fileId);
+            const status = document.getElementById(`status-${fileId}`).value;
+            
+            if (!status) {
+                showMessage('Please select a status', 'error');
+                return;
+            }
+            
+            const record = {
+                ...fileData,
+                classification: status,
+                uploadDate: new Date().toISOString(),
+                exported: false
+            };
+            
+            database.ref('files/' + fileId).set(record).then(() => {
+                showMessage(`${fileData.name} saved successfully!`, 'success');
+                document.querySelector(`[onclick="confirmFile('${fileId}')"]`).closest('.file-item').remove();
+                pendingFiles = pendingFiles.filter(f => f.id !== fileId);
+            }).catch(e => showMessage(`Save failed: ${e.message}`, 'error'));
+        }
+
+        function loadAdminData() {
+            document.getElementById('filesList').innerHTML = '<div class="loading">Loading...</div>';
+            
+            database.ref('files').on('value', snapshot => {
+                allFiles = snapshot.val() || {};
+                updateExportGrid();
+                updateFilesList();
+            });
+        }
+
+        function updateExportGrid() {
+            const counts = {};
+            Object.values(allFiles).forEach(file => {
+                if (!file.exported) {
+                    counts[file.classification] = (counts[file.classification] || 0) + 1;
+                }
+            });
+
+            const grid = document.getElementById('exportGrid');
+            grid.innerHTML = Object.entries(classifications).map(([key, label]) => {
+                const count = counts[key] || 0;
+                return `
+                    <div class="export-card">
+                        <div class="export-count">${count}</div>
+                        <div class="export-label">${label}</div>
+                        <button class="export-btn" onclick="exportClass('${key}')" ${count === 0 ? 'disabled' : ''}>
+                            Export ${label}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateFilesList() {
+            const list = document.getElementById('filesList');
+            const files = Object.values(allFiles).sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+            
+            if (files.length === 0) {
+                list.innerHTML = '<div class="loading">No files uploaded yet</div>';
+                return;
+            }
+
+            list.innerHTML = files.map(file => `
+                <div class="admin-file-item ${file.exported ? 'exported' : ''}">
+                    <div class="file-meta">
+                        <div class="file-title">${file.name}</div>
+                        <div class="file-date">${new Date(file.uploadDate).toLocaleDateString()}</div>
+                    </div>
+                    <div>
+                        <span class="status-badge status-${file.classification}">
+                            ${classifications[file.classification]}
+                        </span>
+                        ${file.exported ? '<span style="color: #27ae60; font-size: 0.8em; margin-left: 10px;">✓ Exported</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function exportClass(classKey) {
+            const filesToExport = Object.values(allFiles).filter(f => 
+                f.classification === classKey && !f.exported
+            );
+            
+            if (filesToExport.length === 0) {
+                showMessage('No files to export', 'error');
+                return;
+            }
+
+            // Collect all CRNs from files of this class
+            const allCrns = new Set();
+            filesToExport.forEach(file => {
+                const headers = file.data[0];
+                const crnIndex = headers.findIndex(h => 
+                    h && h.toString().toLowerCase().trim() === 'crn'
+                );
+                
+                if (crnIndex !== -1) {
+                    file.data.slice(1).forEach(row => {
+                        if (row[crnIndex]) {
+                            allCrns.add(row[crnIndex].toString().trim());
+                        }
+                    });
+                }
+            });
+
+            if (allCrns.size === 0) {
+                showMessage('No CRN data found', 'error');
+                return;
+            }
+
+            // Create export data with class name as header
+            const exportData = [
+                ['crn', classKey],
+                ...Array.from(allCrns).map(crn => [crn, 'TRUE'])
+            ];
+
+            // Generate Excel file
+            const ws = XLSX.utils.aoa_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, classKey);
+            XLSX.writeFile(wb, `${classKey}_data.xlsx`);
+
+            // Mark files as exported
+            const updates = {};
+            filesToExport.forEach(file => {
+                updates[`/files/${file.id}/exported`] = true;
+                updates[`/files/${file.id}/exportDate`] = new Date().toISOString();
+            });
+            
+            database.ref().update(updates).then(() => {
+                showMessage(`Exported ${allCrns.size} CRNs from ${filesToExport.length} files`, 'success');
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showMessage(message, type) {
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.textContent = message;
+            document.querySelector('.content').insertBefore(div, document.querySelector('.content').firstChild);
+            setTimeout(() => div.remove(), 4000);
+        }
+    </script>
+</body>
+</html>
